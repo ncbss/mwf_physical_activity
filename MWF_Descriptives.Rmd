@@ -1,0 +1,340 @@
+---
+title: "MWF_Descriptives_PASE"
+author: "Narlon Cassio"
+date: "November 3, 2021"
+output: 
+  pdf_document: 
+    toc: yes
+    number_sections: yes
+    toc_depth: 5
+  word_document: 
+    toc: yes
+    toc_depth: 5
+geometry: "left = 1cm, right = 1cm, top = 1cm, bottom = 2.5cm"
+header-includes:
+- \usepackage{caption}
+- \usepackage{pdflscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+editor_options: 
+  chunk_output_type: console
+---
+
+\newpage
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+  fig.height = 4, fig.width = 5, fig.align="center"
+)
+```
+\small
+# Loading packages
+```{r, }
+#------------------------------------------------------------------#
+# Loading packages                                              ####
+#------------------------------------------------------------------#
+library(tidyverse)
+library(tableone)
+library(gvlma)
+library(openxlsx)
+library(broom)
+library(psych)
+library(knitr)
+library(rstatix)
+library(performance)
+```
+
+# Loading data
+```{r, message = FALSE}
+#------------------------------------------------------------------#
+# Loading data                                                  ####
+#------------------------------------------------------------------#
+# Outcome and descriptive data
+all_data_clean <- read.xlsx("all_data_clean.xlsx") %>% 
+  filter(is.na(pase)==FALSE) %>% 
+  filter(is.na(ALL_mean)==FALSE)
+
+# Transforming myelin data to percentages
+percnt_mwf <- function(x, na.rm = FALSE) x * 100
+
+all_data_clean <- all_data_clean %>% 
+  mutate_at(c("ALL_mean",
+               "Ant_CR_mean",
+               "Ant_IC_mean",
+               "BCC_mean",
+               "Cingulum_mean",
+               "Ext_Cap_mean",
+               "Fornix_mean",
+               "GCC_mean",
+               "Post_CR_mean",
+               "Post_IC_mean",
+               "Post_TR_mean",
+               "Retro_IC_mean",
+               "Sag_Strat_mean",
+               "SCC_mean",
+               "SLF_mean",
+               "Sup_CR_mean",
+               "MWF_TOT_WM_mean",
+              "MWF_TOT_WM_ero_mean",
+               "Frontal_WM_all_mean",
+               "Parietal_WM_all_mean"), percnt_mwf, na.rm = FALSE)
+
+```
+# Data management
+## Checking data
+## Demographics 
+```{r, fig.height = 7, fig.width = 6}
+# Checking variables
+## Continous demographics data
+kable(digits = 3, describe(all_data_clean[c("age",
+                                             "moca",
+                                             "mmse",
+                                             "height",
+                                             "weight",
+                                             "bmi",
+                                            "pase")]))
+    ## Histograms
+    all_data_clean %>%
+      select("id", "age", "moca", "mmse", "height", "weight", "bmi") %>%
+      pivot_longer(values_to = "data", names_to = "measures", col = 2:7) %>%
+      ggplot(aes(data, fill = measures)) +
+      geom_histogram(colour = "black", binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3))) +
+      facet_wrap(~measures, scales = "free")+
+      theme_minimal() +
+      theme(legend.position = "none")
+    
+    ## Normality tests
+    kable(digits = 2, caption = "Normality test", all_data_clean %>% 
+        shapiro_test(age,
+                     moca,
+                     mmse,
+                     height,
+                     weight,
+                     bmi,
+                     pase))
+
+    ## Converting Fazekas scores to character
+all_data_clean <- all_data_clean %>% 
+  mutate(fazekas_score = as.character(fazekas_score))
+
+## Categorical demographics data 
+kable(print(printToggle = FALSE, CreateTableOne(data = all_data_clean, c("sex", "fazekas_score", "education"))))
+kable(print(printToggle = FALSE, CreateTableOne(data = all_data_clean, 
+                                                c("fci_1_arthritis",
+                                                  "fci_2_osteoporosis",
+                                                  "fci_3_asthma",
+                                                  "fci_4_copd_ards_or_emphysema",
+                                                  "fci_5_angina",
+                                                  "fci_6_congestive_heart_failure_or_heart_disease",
+                                                  "fci_7_heart_attack_myocardial_infarct",
+                                                  "fci_8_neurological_disease",
+                                                  "fci_9_stroke_or_tia",
+                                                  "fci_10_peripheral_vascular_disease",
+                                                  "fci_11_diabetes_type_i_and_ii",
+                                                  "fci_12_upper_gastrointestinal_disease",
+                                                  "fci_13_depression",                                
+                                                  "fci_14_anxiety_or_panic_disorders",
+                                                  "fci_15_visual_impairment",
+                                                  "fci_16_hearing_impairment",
+                                                  "fci_17_degenerative_disc_disease",
+                                                  "fci_18_obesity_and_or_body_mass_index_30",
+                                                  "fci_19_thyroid_disease",
+                                                  "fci_20_cancer",
+                                                  "fci_21_hypertension",
+                                                  "fci_total"))))
+## Total Functional commorbidity index
+kable(digits = 2, describe(all_data_clean[c("fci_total")], fast = TRUE, IQR = TRUE))
+
+```
+
+### Myelin data
+```{r, fig.height = 15, fig.width = 10}
+# Checking variables
+# Means for MWF ROI and Whole-brain 
+kable(digits = 3, describe(all_data_clean[c("ALL_mean",
+                                           "Ant_CR_mean",
+                                           "Ant_IC_mean",
+                                           "BCC_mean",
+                                           "Cingulum_mean",
+                                           "Ext_Cap_mean",
+                                           "Fornix_mean",
+                                           "GCC_mean",
+                                           "Post_CR_mean",
+                                           "Post_IC_mean",
+                                           "Post_TR_mean",
+                                           "Retro_IC_mean",
+                                           "Sag_Strat_mean",
+                                           "SCC_mean",
+                                           "SLF_mean",
+                                           "Sup_CR_mean",
+                                           "MWF_TOT_WM_mean",
+                                           "MWF_TOT_WM_ero_mean",
+                                           "Frontal_WM_all_mean",
+                                           "Parietal_WM_all_mean",
+                                           "eicv_cm3",
+                                           "wmh_cm3")]))
+    ## Histograms
+    all_data_clean %>%
+      select("id", "ALL_mean",
+              "Ant_CR_mean",
+              "Ant_IC_mean",
+              "BCC_mean",
+              "Cingulum_mean",
+              "Ext_Cap_mean",
+              "Fornix_mean",
+              "GCC_mean",
+              "Post_CR_mean",
+              "Post_IC_mean",
+              "Post_TR_mean",
+              "Retro_IC_mean",
+              "Sag_Strat_mean",
+              "SCC_mean",
+              "SLF_mean",
+              "Sup_CR_mean",
+              "MWF_TOT_WM_mean",
+              "MWF_TOT_WM_ero_mean",
+              "Frontal_WM_all_mean",
+              "Parietal_WM_all_mean",
+              "eicv_cm3",
+              "wmh_cm3") %>%
+      pivot_longer(values_to = "data", names_to = "measures", col = 2:23) %>%
+      ggplot(aes(data, fill = measures)) +
+      geom_histogram(colour = "black", binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3))) +
+      facet_wrap(~measures, ncol = 3, scales = "free") +
+      theme_minimal() +
+      theme(legend.position = "none")
+    
+    ## Normality tests
+    kable(digits = 2, caption = "Normality test", all_data_clean %>%
+            shapiro_test(ALL_mean,
+                         Ant_CR_mean,
+                         Ant_IC_mean,
+                         BCC_mean,
+                         Cingulum_mean,
+                         Ext_Cap_mean,
+                         Fornix_mean,
+                         GCC_mean,
+                         Post_CR_mean,
+                         Post_IC_mean,
+                         Post_TR_mean,
+                         Retro_IC_mean,
+                         Sag_Strat_mean,
+                         SCC_mean,
+                         SLF_mean,
+                         Sup_CR_mean,
+                         MWF_TOT_WM_mean,
+                         MWF_TOT_WM_ero_mean,
+                         Frontal_WM_all_mean,
+                         Parietal_WM_all_mean,
+                         eicv_cm3,
+                         wmh_cm3))
+    
+    # Transforming non-normal variables 
+    ## MWF data
+    all_data_clean <- all_data_clean %>% 
+      mutate(Ant_IC_mean = ifelse(Ant_IC_mean >= 21, NA, Ant_IC_mean), # Removing outlier in Anterior Internal capsule
+             Ext_Cap_mean_lg = log1p(Ext_Cap_mean)) 
+    
+    ## WMH data
+    all_data_clean <- all_data_clean %>% 
+      mutate(wmh_cm3_lg = log1p(wmh_cm3))
+
+    ## Normality tests
+    kable(digits = 2, caption = "Normality test", all_data_clean %>%
+            shapiro_test(Ant_IC_mean,
+                         Ext_Cap_mean_lg,
+                         wmh_cm3_lg))
+```
+
+```{r, fig.height = 12, fig.width = 10}
+## Prepting data for ploting (MWF by ROI)
+all_data_clean %>% pivot_longer(names_to = "roi", values_to = "mwf", cols = c(38:56)) %>% 
+  select(id, sex, roi, mwf) %>% 
+  mutate(roi = str_replace_all(roi, c("Ant_CR_mean" = "Corona Radiata, anterior",
+                                      "Ant_IC_mean" = "Internal Capsule, anterior",
+                                      "BCC_mean" = "Corpus Callosum, body",
+                                      "Cingulum_mean" = "Cingulum",
+                                      "Ext_Cap_mean" = "External Capsule",
+                                      "Fornix_mean" = "Fornix",
+                                      "GCC_mean" = "Corpus Callosum, genu",
+                                      "MWF_TOT_WM_mean" = "Whole-brain White Matter",
+                                      "Post_CR_mean" = "Corona Radiata, posterior",
+                                      "Sup_CR_mean" = "Corona Radiata, superior",
+                                      "Post_IC_mean" = "Internal Capsule, posterior",
+                                      "Post_TR_mean" = "Thalamic Radiation, posterior",
+                                      "Retro_IC_mean" = "Internal Capsule, Retrolenticular",
+                                      "Sag_Strat_mean" = "Sagittal Stratum",
+                                      "SCC_mean" = "Corpus Callosum, splenium",
+                                      "SLF_mean" = "Superior Longitudinal Fasciculus",
+                                      "Frontal_WM_all_mean" = "Frontal white matter",
+                                      "Parietal_WM_all_mean" = "Parietal white matter",
+                                      "ALL_mean" = "All ROIs"))) %>%     
+## Plotting MWF ROI data
+ggplot(aes(reorder(roi, mwf, na.rm = TRUE), mwf)) +
+  geom_boxplot(aes(alpha = 0.3,  fill = sex)) +
+  xlab("Regions of interest") +
+  ylab("Myelin water fraction") +
+  coord_flip() +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text = element_text(colour = "black", size = 12),
+        axis.text.y = element_text(face="bold"),
+        axis.title = element_text(colour = "black", size = 12)) 
+```
+
+
+### Structural data
+```{r, fig.height = 3, fig.width = 6}
+# Checking variables
+# Thickness
+kable(digits = 3, describe(all_data_clean[c("lh_mean_thickness", "rh_mean_thickness", "mean_thickness")]))
+
+   ## Histograms
+    all_data_clean %>%
+      select("id","lh_mean_thickness", "rh_mean_thickness", "mean_thickness") %>%
+      pivot_longer(values_to = "data", names_to = "measures", col = 2:4) %>%
+      ggplot(aes(data, fill = measures)) +
+      geom_histogram(colour = "black", binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3))) +
+      facet_wrap(~measures, ncol = 3, scales = "free") +
+      theme_minimal() +
+      theme(legend.position = "none")
+    
+    
+    ## Normality tests 
+    kable(digits = 2, caption = "Normality test", all_data_clean %>%
+            shapiro_test(lh_mean_thickness,
+                         rh_mean_thickness,
+                         mean_thickness))
+    
+
+kable(digits = 3, describe(all_data_clean[c("cerebral_wm_vol_cm3", "sub_cort_gm_vol_cm3", "total_gm_vol_cm3",
+                                            "left_hippocampus_cm3", "right_hippocampus_cm3",
+                                            "left_lateral_ventricle_cm3", "right_lateral_ventricle_cm3")]))
+```
+
+```{r, fig.height = 7, fig.width = 6}
+    ## Histograms
+    all_data_clean %>%
+          select("id","cerebral_wm_vol_cm3", "sub_cort_gm_vol_cm3", "total_gm_vol_cm3",
+                 "left_hippocampus_cm3", "right_hippocampus_cm3",
+                 "left_lateral_ventricle_cm3", "right_lateral_ventricle_cm3") %>%
+          pivot_longer(values_to = "data", names_to = "measures", col = 2:8) %>%
+          ggplot(aes(data, fill = measures)) +
+          geom_histogram(colour = "black", binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3))) +
+          facet_wrap(~measures, ncol = 3, scales = "free") +
+          theme_minimal() +
+          theme(legend.position = "none")
+    
+
+     ## Normality tests
+    kable(digits = 2, caption = "Normality test", all_data_clean %>%
+            shapiro_test(cerebral_wm_vol_cm3, sub_cort_gm_vol_cm3, total_gm_vol_cm3,
+                        left_hippocampus_cm3, right_hippocampus_cm3,
+                        left_lateral_ventricle_cm3, right_lateral_ventricle_cm3))
+
+```
+
+```{r, }
+# Saving final dataset
+write.xlsx(all_data_clean, "all_data_clean_final.xlsx")
+```

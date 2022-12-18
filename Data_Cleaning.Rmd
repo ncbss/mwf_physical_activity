@@ -1,0 +1,317 @@
+---
+title: "MWF Data Cleaning"
+author: "Narlon Cassio"
+date: "November 5, 2021"
+output: 
+  pdf_document: 
+    toc: yes
+    number_sections: yes
+    toc_depth: 5
+  word_document: 
+    toc: yes
+    toc_depth: 5
+geometry: "left = 1cm, right = 1cm, top = 1cm, bottom = 2.5cm"
+header-includes:
+- \usepackage{caption}
+- \usepackage{pdflscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+editor_options: 
+  chunk_output_type: console
+---
+
+\newpage
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+  fig.height = 4, fig.width = 5, fig.align="center"
+)
+```
+\small
+# Loading packages
+```{r, }
+#------------------------------------------------------------------#
+# Loading packages                                              ####
+#------------------------------------------------------------------#
+library(tidyverse)
+library(openxlsx)
+library(knitr)
+
+```
+
+# Cleaning data
+## Demographic data
+```{r }
+# Loading data
+cogmob_dem <- read.xlsx("data/cogmob_demographics_30April2021.xlsx")
+rvci_dem <- read.xlsx("data/rvci_demographics_30April2021.xlsx")
+subjects <- read_table("data/subjects_list.txt", col_names = "id")
+
+## Adding pase data
+rvci_pase <- read.xlsx("data/Cassio_PASE & Demographics_Notes_20211025.xlsx") %>%
+  select(1,4) %>% 
+  rename(id = 1, pase = 2)
+
+cogmob_pase <- read.xlsx("data/Cogmob Physical and Questinonaire DATA_2018-01-30.xlsx") %>%
+  filter(timepoint == 0) %>% 
+  select(1,7) %>% 
+  rename(id = 1, pase = 2) %>% 
+  mutate(id = str_replace_all(id, c("MCI" = "FALLERS2_")))
+
+## RVCI
+rvci_dem <- rvci_dem %>% 
+  rename(age = "Age.at.Enrollment", height = "Height.(cm)", weight = "Weight.(kg)", moca = Total.MoCA, mmse = Total.MMSE) %>% 
+  rename_all(tolower) %>%
+  rename_with(~(gsub(".", "_", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub(",", "_", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub("/", "_", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub("(", "_", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub(">", "", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub(")", "", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub("__", "_", .x, fixed = TRUE))) %>% 
+  mutate(sex = str_replace_all(sex, c("M" = "male", "F" = "female")))
+
+rvci_dem <- rvci_dem %>% 
+  select(id, age, sex, education, moca, mmse, height, weight, bmi, meters_walked, overall_fall_risk_score,
+         fci_1_arthritis,
+         fci_2_osteoporosis,
+         fci_3_asthma,
+         fci_4_copd_ards_or_emphysema,
+         fci_5_angina, 
+         fci_6_congestive_heart_failure_or_heart_disease,
+         fci_7_heart_attack_myocardial_infarct,
+         fci_8_neurological_disease,
+         fci_9_stroke_or_tia,
+         fci_10_peripheral_vascular_disease,
+         fci_11_diabetes_type_i_and_ii,
+         fci_12_upper_gastrointestinal_disease,
+         fci_13_depression,                                
+        fci_14_anxiety_or_panic_disorders,
+        fci_15_visual_impairment,
+        fci_16_hearing_impairment,
+        fci_17_degenerative_disc_disease,
+        fci_18_obesity_and_or_body_mass_index_30,
+        fci_19_thyroid_disease,
+        fci_20_cancer,
+        fci_21_hypertension,
+        fci_total)
+
+## CogMob
+cogmob_dem <- cogmob_dem %>%
+  rename(height = "Final.Height", weight = "Final.Weight", moca = Total.MoCA, mmse = Total.MMSE) %>% 
+  mutate(bmi = weight/((height/100)^2)) %>% 
+  rename_all(tolower) %>% 
+  rename_with(~(gsub(".", "_", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub(",", "_", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub("/", "_", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub("(", "_", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub(">", "", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub(")", "", .x, fixed = TRUE))) %>% 
+  rename_with(~(gsub("__", "_", .x, fixed = TRUE))) %>% 
+  mutate(id = str_replace_all(id, c("MCI" = "FALLERS2_")))
+
+cogmob_dem <- cogmob_dem %>% 
+  select(id, age, sex, education, moca, mmse, height, weight, bmi, meters_walked, overall_fall_risk_score,
+         fci_1_arthritis,
+         fci_2_osteoporosis,
+         fci_3_asthma,
+         fci_4_copd_ards_or_emphysema,
+         fci_5_angina, 
+         fci_6_congestive_heart_failure_or_heart_disease,
+         fci_7_heart_attack_myocardial_infarct,
+         fci_8_neurological_disease,
+         fci_9_stroke_or_tia,
+         fci_10_peripheral_vascular_disease,
+         fci_11_diabetes_type_i_and_ii,
+         fci_12_upper_gastrointestinal_disease,
+         fci_13_depression,                                
+         fci_14_anxiety_or_panic_disorders,
+         fci_15_visual_impairment,
+         fci_16_hearing_impairment,
+         fci_17_degenerative_disc_disease,
+         fci_18_obesity_and_or_body_mass_index_30,
+         fci_19_thyroid_disease,
+         fci_20_cancer,
+         fci_21_hypertension,
+         fci_total)
+
+# Merging all
+## Adding PASE data
+cogmob_dem <- left_join(cogmob_dem, cogmob_pase)
+rvci_dem <- left_join(rvci_dem, rvci_pase)
+
+all_data_demographics <- rbind(cogmob_dem, rvci_dem)
+
+## Recoding education
+all_data_demographics <- all_data_demographics %>% 
+  mutate(education = str_replace_all(education, c("trades or professional certificate or diploma \\(CEGEP in Quebec\\)" = "trades",
+                                                    "Less than grade 9" = "high school or less",
+                                                    "high school certificate or diploma" = "high school or less",
+                                                    "grades 9-13, without certificate or diploma" = "high school or less",
+                                                    "some university certificate or diploma" = "some university")))
+
+```
+
+## Myelin water fraction data
+```{r }
+# Loading data
+cogmob_mwf <- read.xlsx("./data/cogmob_mwf_all_wm.xlsx") # Needs to be separate from rvci due to IDs having different lengths
+rvci_mwf <- read.xlsx("./data/rvci_mwf_all_wm.xlsx")
+
+# Cleaning up
+## MWF
+cogmob_mwf <- cogmob_mwf %>% 
+  separate(ID_ROI, c("id","roi"), sep = 12) # Cleaning up ROI and study id
+
+rvci_mwf <- rvci_mwf %>%
+  separate(ID_ROI, c("id","roi"), sep = 8) # Cleaning up ROI and study id
+
+## Merging datasets
+all_mwf_data <- rbind(cogmob_mwf, rvci_mwf) %>% 
+  mutate(roi = str_replace_all(roi, c("_ROI_" = "", "_M" = "M","_wm" = "_WM"))) %>% 
+  mutate(roi = str_replace_all(roi, c("JLF_" = "", "_F" = "F","_O" = "O", "_P" = "P"))) %>% 
+  rename("volume" = "Volume.(voxels)") %>% 
+  rename_all(tolower)
+
+## Transposing roi mwf data from long to wide
+## and merging data 
+all_mwf_data <- left_join(
+  
+  (all_mwf_data %>% 
+  pivot_wider(id_cols = id, names_from = roi, values_from = mwf_mean) %>% 
+  rename_with(~paste(., sep = "_", "mean"), 2:21)), 
+  
+  (all_mwf_data %>% 
+  pivot_wider(id_cols = id, names_from = roi, values_from = mwf_sd) %>% 
+  rename_with(~paste(., sep = "_", "sd"), 2:21)), by = "id") %>% 
+  
+  left_join(., (all_mwf_data %>% 
+  pivot_wider(id_cols = id, names_from = roi, values_from = volume) %>% 
+  rename_with(~paste(., sep = "_", "vol"), 2:21)), by = "id")
+
+## Verifying
+kable(all_mwf_data[c(1,2:4,22:24,42:44)] %>% head())
+```
+
+## eICV, WMH and Fazekas data
+```{r }
+# Adding eicv data, computed separately to increase N
+all_eicv <- rbind(
+  read.xlsx("data/rvci_eicv.xlsx") %>% 
+  rename(id = ID),
+  
+  read.xlsx("data/cogmob_eicv.xlsx") %>% 
+  rename(id = ID)) %>% 
+  mutate(eicv_cm3 = eicv/1000) %>% 
+  select(-eicv)
+
+
+# WMH and Fazekas score
+rvci_wmh <- read.xlsx("data/rvci_wmh_volume.xlsx" )
+cogmob_wmh <- read.xlsx("data/cogmob_wmh_volume.xlsx") 
+
+cogmob_wmh <- cogmob_wmh %>% 
+  rename(id = ID, wmh = Total.Vol, fazekas_score = Fazekas.Score) %>% 
+  mutate(id = str_replace(id, "Cogmob2_", "FALLERS2_"))
+
+rvci_wmh <- rvci_wmh %>% 
+  rename(id = ID, 
+         wmh = Total.Vol, 
+         fazekas_score = Fazekas.from.Baseline.MRI)
+
+all_wmh <- rbind(cogmob_wmh, rvci_wmh) %>% 
+  rename_all(tolower) %>% 
+  mutate(wmh_cm3 = wmh/1000) %>% 
+  select(id, wmh_cm3, fazekas_score)
+
+```
+
+## Structural data
+```{r, }
+## ------------------------------------------------------- ##
+#                       Structural data                     #
+## ------------------------------------------------------- ##
+# FreeSurfer data
+## Loading thickness data
+
+all_aparc_thickness <- left_join(
+  (read.xlsx("data/all_aseg_parc.xlsx", sheet = "aparc_thickness_lh") %>% rename(id = 1)),
+  
+  (read.xlsx("data/all_aseg_parc.xlsx", sheet = "aparc_thickness_rh") %>% rename(id = 1)))
+
+## Loading aseg volumetric data 
+all_aseg_stats <- read.xlsx("data/all_aseg_parc.xlsx", sheet = "aseg_stats")
+
+## Cleaning up
+all_aparc_thickness <- all_aparc_thickness %>% 
+  rename_with(~(gsub("-", "_", .x, fixed = TRUE))) %>% 
+  rename(lh_mean_thickness = lh_MeanThickness_thickness,
+         rh_mean_thickness = rh_MeanThickness_thickness) %>% 
+  mutate(mean_thickness = (rh_mean_thickness + lh_mean_thickness)/2)
+
+# Volumetric data
+## Renaming variables
+all_aseg_stats <- all_aseg_stats %>% 
+  rename(id = "Measure:volume",
+         lh_wm_vol = lhCerebralWhiteMatterVol,
+         rh_wm_vol = rhCerebralWhiteMatterVol,
+         cerebral_wm_vol = CerebralWhiteMatterVol,
+         lh_cortex_vol = lhCortexVol,
+         rh_cortex_vol = rhCortexVol,
+         sub_cort_gm_vol = SubCortGrayVol,
+         total_gm_vol = TotalGrayVol) %>% 
+  rename_with(~(gsub("-", "_", .x, fixed = TRUE))) %>%
+  rename_all(tolower) %>% 
+  select(id, 
+         lh_wm_vol, rh_wm_vol, cerebral_wm_vol,
+         lh_cortex_vol, rh_cortex_vol, sub_cort_gm_vol, total_gm_vol,
+         left_hippocampus, right_hippocampus, 
+         left_lateral_ventricle, right_lateral_ventricle,
+         left_inf_lat_vent, right_inf_lat_vent)
+
+# Transforming volumetric data to cm3
+vol_cm3 <- function(x, na.rm = FALSE) x / 1000
+
+all_aseg_stats <- all_aseg_stats %>% 
+  mutate_at(c("lh_wm_vol", 
+               "rh_wm_vol", 
+               "cerebral_wm_vol",
+               "lh_cortex_vol", 
+               "rh_cortex_vol", 
+               "sub_cort_gm_vol",
+               "left_hippocampus",
+               "right_hippocampus",
+               "total_gm_vol",
+               "left_lateral_ventricle",
+               "right_lateral_ventricle",
+               "left_inf_lat_vent",
+               "right_inf_lat_vent"), vol_cm3, na.rm = FALSE) %>% 
+  rename_with(~paste(., sep = "_", "cm3"), 2:14)
+
+```
+
+# Merging datasets
+```{r }
+# Merging
+all_data_clean <- left_join(subjects, all_data_demographics, by = "id") %>% 
+  left_join(., all_wmh, by = "id") %>% 
+  left_join(., all_eicv, by = "id") %>% 
+  left_join(., all_mwf_data, by = "id") %>% 
+  left_join(., all_aparc_thickness, by = "id") %>% 
+  left_join(., all_aseg_stats, by = "id")
+
+```
+
+# Saving datasets
+```{r }
+# Removing ineligible participants
+all_data_clean <- all_data_clean %>% 
+  filter(id != "FALLERS2_228") %>%    # Duplicate with RVCI_027
+  filter(id != "RVCI_016")            # Did baseline twice for the study
+
+# Checking observations for duplicates
+tableone::CreateTableOne(data = all_data_clean, "id")
+
+# Saving 
+write.xlsx(all_data_clean, "all_data_clean.xlsx")
+```
